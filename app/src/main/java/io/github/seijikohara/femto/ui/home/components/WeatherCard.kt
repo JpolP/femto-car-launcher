@@ -99,6 +99,8 @@ internal fun WeatherCard(
     hazeState: HazeState = rememberHazeState(),
     glassConfig: GlassConfig = GlassConfig(),
     motionTier: MotionTier = MotionTier.STANDARD,
+    // Compact: just the current temperature + glyph, wrapping its height.
+    compact: Boolean = false,
 ) = Surface(
     // glassChrome clips to the rounded shape (keeping the ripple inside) and
     // paints the frosted-glass backdrop over the map; the maximize tap lives on
@@ -134,7 +136,7 @@ internal fun WeatherCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight()
+                    .then(if (compact) Modifier else Modifier.fillMaxHeight())
                     .clickable { onExpand() }
                     .semantics { contentDescription = weatherExpandLabel }
                     // Compact padding/gap so head + metrics + forecast pack into the
@@ -148,25 +150,29 @@ internal fun WeatherCard(
             // nodes rather than one wrapping both. They are the fixed hero, so the
             // refresh dissolve stays here while the forecast below scrolls instead.
             Motion.ContentCrossfade(targetState = snapshot, tier = motionTier, label = "weatherHead") { current ->
-                Head(current, temperatureUnit, asOf)
+                Head(current, temperatureUnit, asOf, compact)
             }
-            Motion.ContentCrossfade(targetState = snapshot, tier = motionTier, label = "weatherMetrics") { current ->
-                Metrics(current, temperatureUnit, speedUnit)
+            if (!compact) {
+                Motion.ContentCrossfade(targetState = snapshot, tier = motionTier, label = "weatherMetrics") { current ->
+                    Metrics(current, temperatureUnit, speedUnit)
+                }
             }
             // The hourly forecast scrolls beneath the fixed hero: weight(1f) bounds
             // this Column to the card's leftover height so verticalScroll has a real
             // viewport, and every hour renders — overflow scrolls rather than being
             // dropped whole (contrast FitWholeRows, still used by the maximize panels).
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .verticalScroll(forecastScroll),
-                verticalArrangement = Arrangement.spacedBy(FemtoDimens.CardSectionGapCompact),
-            ) {
-                snapshot.hourly.chunked(FORECAST_COLUMNS).forEach { rowHours ->
-                    ForecastRow(rowHours, snapshot.sunrise, snapshot.sunset, temperatureUnit, is24Hour)
+            if (!compact) {
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(forecastScroll),
+                    verticalArrangement = Arrangement.spacedBy(FemtoDimens.CardSectionGapCompact),
+                ) {
+                    snapshot.hourly.chunked(FORECAST_COLUMNS).forEach { rowHours ->
+                        ForecastRow(rowHours, snapshot.sunrise, snapshot.sunset, temperatureUnit, is24Hour)
+                    }
                 }
             }
         }
@@ -255,11 +261,12 @@ private fun Head(
     snapshot: WeatherSnapshot,
     temperatureUnit: TemperatureUnit,
     asOfLabel: String?,
+    compact: Boolean = false,
 ) {
     val tempLabel = "${temperatureUnit.fromCelsius(snapshot.tempC).roundToInt()}"
     val glyphs = weatherGlyphs()
     val tempStyle = MaterialTheme.typography.bigNumber(
-        size = FemtoDimens.Text4Xl,
+        size = if (compact) FemtoDimens.Text2Xl else FemtoDimens.Text4Xl,
         weight = MaterialTheme.typography.normalWeight,
     )
     Column(modifier = Modifier.fillMaxWidth()) {
