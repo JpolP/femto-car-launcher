@@ -3,7 +3,9 @@ package io.github.seijikohara.femto.data.geocoding
 import android.content.Context
 import android.location.Address
 import android.location.Geocoder
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -48,31 +50,50 @@ internal class PlatformReverseGeocoder(
             // construction) governs the returned address language.
             val geocoder = Geocoder(appContext, localeProvider())
             runCatching {
-                suspendCancellableCoroutine<Address?> { continuation ->
-                    // The minSdk-33 async listener variant; the legacy blocking
-                    // overload is deprecated on API 33+.
-                    geocoder.getFromLocation(
-                        latitude,
-                        longitude,
-                        1,
-                        object : Geocoder.GeocodeListener {
-                            override fun onGeocode(addresses: MutableList<Address>) {
-                                continuation.resume(addresses.firstOrNull())
-                            }
-
-                            override fun onError(errorMessage: String?) {
-                                Log.w(TAG, "reverse geocode error: $errorMessage")
-                                continuation.resume(null)
-                            }
-                        },
-                    )
-                }?.toShortAddressOrNull()
+                lookup(geocoder, latitude, longitude)?.toShortAddressOrNull()
             }.onFailure {
                 if (it is CancellationException) throw it
                 Log.w(TAG, "reverse geocode failed", it)
             }.getOrNull()
         }
     }
+
+    private suspend fun lookup(
+        geocoder: Geocoder,
+        latitude: Double,
+        longitude: Double,
+    ): Address? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            lookupAsync(geocoder, latitude, longitude)
+        } else {
+            // Android 10-12: the blocking overload (already on the IO dispatcher).
+            @Suppress("DEPRECATION")
+            geocoder.getFromLocation(latitude, longitude, 1)?.firstOrNull()
+        }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private suspend fun lookupAsync(
+        geocoder: Geocoder,
+        latitude: Double,
+        longitude: Double,
+    ): Address? =
+        suspendCancellableCoroutine { continuation ->
+            geocoder.getFromLocation(
+                latitude,
+                longitude,
+                1,
+                object : Geocoder.GeocodeListener {
+                    override fun onGeocode(addresses: MutableList<Address>) {
+                        continuation.resume(addresses.firstOrNull())
+                    }
+
+                    override fun onError(errorMessage: String?) {
+                        Log.w(TAG, "reverse geocode error: $errorMessage")
+                        continuation.resume(null)
+                    }
+                },
+            )
+        }
 }
 
 /**
