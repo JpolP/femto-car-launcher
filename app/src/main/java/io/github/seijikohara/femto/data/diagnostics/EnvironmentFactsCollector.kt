@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.location.LocationManager
+import android.os.Build
 import android.os.LocaleList
 import android.os.SystemClock
 import android.provider.Settings
@@ -136,7 +137,10 @@ internal class EnvironmentFactsCollector(
     private fun providersFact(locationManager: LocationManager): DiagnosticFact {
         val gps = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
         val network =
-            locationManager.hasProvider(LocationManager.NETWORK_PROVIDER) &&
+            (
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                    locationManager.hasProvider(LocationManager.NETWORK_PROVIDER)
+            ) &&
                 locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
         return DiagnosticFact("Providers", FactValue.Text("gps=$gps, network=$network"))
     }
