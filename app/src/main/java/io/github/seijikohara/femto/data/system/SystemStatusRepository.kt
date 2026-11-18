@@ -19,10 +19,15 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.BatteryManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.telephony.PhoneStateListener
 import android.telephony.SignalStrength
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import io.github.seijikohara.femto.data.common.hasBluetoothConnectPermission
@@ -356,14 +361,56 @@ internal class SystemStatusRepository(
                 awaitClose { }
                 return@callbackFlow
             }
-            val callback = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
-                override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
-                    trySend(signalStrength.level.coerceIn(0, MAX_SIGNAL_LEVEL))
+            val unregister = registerSignalListener(tm) { level -> trySend(level) }
+            awaitClose { unregister() }
+        }
+
+    private fun registerSignalListener(
+        tm: TelephonyManager,
+        onLevel: (Int) -> Unit,
+    ): () -> Unit =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            registerSignalCallbackApi31(tm, onLevel)
+        } else {
+            registerSignalListenerLegacy(tm, onLevel)
+        }
+
+    @SuppressLint("MissingPermission") // Callers gate on hasReadPhoneStatePermission().
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun registerSignalCallbackApi31(
+        tm: TelephonyManager,
+        onLevel: (Int) -> Unit,
+    ): () -> Unit {
+        val callback = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
+            override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
+                onLevel(signalStrength.level.coerceIn(0, MAX_SIGNAL_LEVEL))
+            }
+        }
+        tm.registerTelephonyCallback(context.mainExecutor, callback)
+        return { tm.unregisterTelephonyCallback(callback) }
+    }
+
+    // Android 10-11 have no TelephonyCallback; PhoneStateListener needs a Looper
+    // thread, so it is created and registered on the main looper.
+    @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission") // Callers gate on hasReadPhoneStatePermission().
+    private fun registerSignalListenerLegacy(
+        tm: TelephonyManager,
+        onLevel: (Int) -> Unit,
+    ): () -> Unit {
+        val handler = Handler(Looper.getMainLooper())
+        var registered: PhoneStateListener? = null
+        handler.post {
+            val listener = object : PhoneStateListener() {
+                override fun onSignalStrengthsChanged(signalStrength: SignalStrength?) {
+                    signalStrength?.let { onLevel(it.level.coerceIn(0, MAX_SIGNAL_LEVEL)) }
                 }
             }
-            tm.registerTelephonyCallback(context.mainExecutor, callback)
-            awaitClose { tm.unregisterTelephonyCallback(callback) }
+            registered = listener
+            tm.listen(listener, PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
         }
+        return { handler.post { registered?.let { tm.listen(it, PhoneStateListener.LISTEN_NONE) } } }
+    }
 
     // Combine the reception flag with the satellite count so the dock renders
     // both from one [SystemStatus] slot. combine emits once both sources have
@@ -418,6 +465,18 @@ internal class SystemStatusRepository(
             .flatMapLatest { gnssSatelliteCallbackFlow(lm) }
     }
 
+    @Suppress("DEPRECATION")
+    @SuppressLint("MissingPermission") // Gated on hasFineLocationPermission() by the caller.
+    private fun registerGnss(
+        lm: LocationManager,
+        callback: GnssStatus.Callback,
+    ): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            lm.registerGnssStatusCallback(context.mainExecutor, callback)
+        } else {
+            lm.registerGnssStatusCallback(callback, Handler(Looper.getMainLooper()))
+        }
+
     @SuppressLint("MissingPermission") // Gated on hasFineLocationPermission() below.
     private fun gnssSatelliteCallbackFlow(lm: LocationManager): Flow<Int> {
         if (!context.hasFineLocationPermission()) return flowOf(0)
@@ -435,7 +494,7 @@ internal class SystemStatusRepository(
             // Registration refusal is reported via the Boolean, not an exception,
             // so no upstream catch ever sees it — the dock would read "searching"
             // forever despite a working fix. Some head-unit GNSS HALs do refuse.
-            if (!lm.registerGnssStatusCallback(context.mainExecutor, callback)) {
+            if (!registerGnss(lm, callback)) {
                 Log.w(TAG, "GnssStatus callback registration refused; satellite count stays 0")
             }
             awaitClose { lm.unregisterGnssStatusCallback(callback) }
