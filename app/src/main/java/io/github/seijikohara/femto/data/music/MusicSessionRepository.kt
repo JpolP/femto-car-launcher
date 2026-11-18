@@ -522,7 +522,22 @@ internal class MusicSessionRepository(
  * check (which excludes STATE_PAUSED) is not enough here.
  */
 internal fun PlaybackState?.isPlayingOrPaused(): Boolean =
-    this != null && (isActive() || state == PlaybackState.STATE_PAUSED)
+    this != null && (isActiveCompat() || state == PlaybackState.STATE_PAUSED)
+
+// PlaybackState#isActive needs API 31; this mirrors its state set for older releases.
+private fun PlaybackState.isActiveCompat(): Boolean =
+    when (state) {
+        PlaybackState.STATE_FAST_FORWARDING,
+        PlaybackState.STATE_REWINDING,
+        PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+        PlaybackState.STATE_SKIPPING_TO_NEXT,
+        PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM,
+        PlaybackState.STATE_BUFFERING,
+        PlaybackState.STATE_CONNECTING,
+        PlaybackState.STATE_PLAYING,
+        -> true
+        else -> false
+    }
 
 /**
  * Return `true` when the state is PLAYING. The other half of the pair the card
