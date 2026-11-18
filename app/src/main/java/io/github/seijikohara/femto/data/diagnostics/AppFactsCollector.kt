@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
 import androidx.core.content.getSystemService
+import android.os.Build
+import androidx.annotation.RequiresApi
 import io.github.seijikohara.femto.BuildConfig
 import io.github.seijikohara.femto.data.update.UpdateChannel
 import io.github.seijikohara.femto.data.update.UpdatePreferences
@@ -145,8 +147,14 @@ internal class AppFactsCollector(
                         DiagnosticFact(
                             "Installer",
                             FactValue.Text(
-                                packageManager.getInstallSourceInfo(context.packageName).installingPackageName
-                                    ?: "sideload/unknown",
+                                (
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                        packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+                                    } else {
+                                        @Suppress("DEPRECATION")
+                                        packageManager.getInstallerPackageName(context.packageName)
+                                    }
+                                ) ?: "sideload/unknown",
                             ),
                         ),
                     )
@@ -163,12 +171,23 @@ internal class AppFactsCollector(
 
     suspend fun crashHistory(): SectionPayload.Facts =
         withContext(Dispatchers.IO) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                crashHistoryApi30()
+            } else {
+                SectionPayload.Facts(
+                    listOf(DiagnosticFact("Exit history", FactValue.Text("not available before Android 11"))),
+                )
+            }
+        }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun crashHistoryApi30(): SectionPayload.Facts {
             val exitInfos =
                 context
                     .getSystemService<ActivityManager>()
                     ?.getHistoricalProcessExitReasons(null, 0, MAX_EXIT_HISTORY)
                     .orEmpty()
-            SectionPayload.Facts(
+            return SectionPayload.Facts(
                 if (exitInfos.isEmpty()) {
                     listOf(DiagnosticFact("Exit history", FactValue.Text("none recorded")))
                 } else {
