@@ -112,7 +112,7 @@ object FemtoDimens {
     val DockThickness = 64.dp
 
     /** Album art size inside the music card's vertical playing layout. */
-    val MusicArtSize = 140.dp
+    val MusicArtSize = 200.dp
 
     /**
      * Minimum width guaranteed to the music card's title / artist / album
