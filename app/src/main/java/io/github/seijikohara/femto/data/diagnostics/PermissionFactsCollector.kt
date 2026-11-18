@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.PermissionInfo
+import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
@@ -56,10 +57,15 @@ internal class PermissionFactsCollector(
         withContext(Dispatchers.IO) {
             val packageManager = context.packageManager
             val packageInfo =
-                packageManager.getPackageInfo(
-                    context.packageName,
-                    PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()),
-                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    packageManager.getPackageInfo(
+                        context.packageName,
+                        PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()),
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+                }
             val requested = packageInfo.requestedPermissions
             val dangerous = requested.orEmpty().filter { it.isDangerousPermission(packageManager) }.toSet()
 
@@ -101,13 +107,18 @@ internal class PermissionFactsCollector(
     // unit where holding it is the whole point of the app.
     private fun homeRoleFact(): DiagnosticFact {
         val held = context.holdsHomeRole()
-        val defaultPackage =
-            context.packageManager
-                .resolveActivity(
-                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+        val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolved =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.resolveActivity(
+                    homeIntent,
                     PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong()),
-                )?.activityInfo
-                ?.packageName
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.resolveActivity(homeIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            }
+        val defaultPackage = resolved?.activityInfo?.packageName
         val heldLabel = if (held) "held" else "not held"
         val value = defaultPackage?.let { "$heldLabel (default: $it)" } ?: heldLabel
         return DiagnosticFact("HOME role", FactValue.Status(value, FactHealth.INFO))
