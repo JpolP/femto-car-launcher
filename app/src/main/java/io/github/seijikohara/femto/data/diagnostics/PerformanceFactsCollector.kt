@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.display.DisplayManager
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Debug
 import android.os.PowerManager
 import android.os.Process
@@ -166,13 +167,20 @@ internal class PerformanceFactsCollector(
             .let { refreshRate -> (2_000f / (refreshRate ?: FALLBACK_REFRESH_RATE_HZ)).toLong() }
             .coerceAtLeast(MIN_DELAYED_THRESHOLD_MS)
 
+    private fun headroomOrNull(power: PowerManager): Float? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            power.getThermalHeadroom(HEADROOM_FORECAST_SECONDS)
+        } else {
+            null
+        }
+
     private fun thermalFact(power: PowerManager?): DiagnosticFact {
         val thermal = power?.currentThermalStatus.toThermalLevel()
         // Locale.ROOT keeps the decimal point: the report's grep-stable
         // wording contract must hold on comma-decimal devices too.
         val headroom =
             power
-                ?.getThermalHeadroom(HEADROOM_FORECAST_SECONDS)
+                ?.let { headroomOrNull(it) }
                 ?.takeIf { it.isFinite() }
                 ?.let { " (headroom %.2f)".format(Locale.ROOT, it) }
                 .orEmpty()
