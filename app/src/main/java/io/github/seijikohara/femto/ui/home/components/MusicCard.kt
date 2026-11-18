@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -183,7 +184,7 @@ private fun PlayingState(
                 // pin keeps the content height well-defined, so the card wraps its
                 // content (below) rather than being stretched to an outer allocation
                 // and opening empty top / bottom bands on a tall display.
-                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 180.dp).height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(RowContentGap),
                 // When the width budget caps the art below the meta column's height,
                 // the smaller square sits balanced beside the text instead of hugging
