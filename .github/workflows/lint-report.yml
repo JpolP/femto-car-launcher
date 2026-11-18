@@ -16,7 +16,10 @@ jobs:
       - name: Run lint
         run: ./gradlew lintStableDebug --continue --stacktrace
         continue-on-error: true
-      - name: Print lint errors
+      - name: Print lint findings
         run: |
+          ls -la app/build/reports || true
           f=app/build/reports/lint-results-stableDebug.sarif
-          jq -r '.runs[].results[] | select(.level=="error") | (.ruleId + " " + .locations[0].physicalLocation.artifactLocation.uri + ":" + (.locations[0].physicalLocation.region.startLine|tostring) + " " + .message.text)' $f | sort | uniq | sed 's/^/LINTERR /'
+          echo "LINTDBG total: $(jq '[.runs[].results[]] | length' $f)"
+          jq -r '[.runs[].results[] | .level] | group_by(.) | map((.[0]|tostring) + "=" + (length|tostring)) | join(",")' $f | sed 's/^/LINTDBG levels: /'
+          jq -r '.runs[].results[] | select(.level=="error" or .ruleId=="NewApi") | (.ruleId + " " + .locations[0].physicalLocation.artifactLocation.uri + ":" + (.locations[0].physicalLocation.region.startLine|tostring) + " " + .message.text)' $f | sort -u | sed 's/^/LINTERR /'
