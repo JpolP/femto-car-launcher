@@ -1,5 +1,6 @@
 package io.github.seijikohara.femto.ui.theme
 
+import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -78,6 +79,12 @@ fun FemtoTheme(
             inPreview && darkTheme -> DarkFallback
 
             inPreview -> LightFallback
+
+            // Material You dynamic colour needs Android 12 (API 31); older systems
+            // (Android 10 head units) fall back to the static schemes.
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S && darkTheme -> DarkFallback
+
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> LightFallback
 
             darkTheme -> dynamicDarkColorScheme(context)
 
