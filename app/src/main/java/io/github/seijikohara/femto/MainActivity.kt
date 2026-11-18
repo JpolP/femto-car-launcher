@@ -524,9 +524,10 @@ class MainActivity : ComponentActivity() {
      * false when no assistant resolves (e.g. a head unit without one) so the
      * caller falls back to the in-launcher voice sheet.
      */
+    @Suppress("DEPRECATION")
     private fun launchSystemAssistant(): Boolean =
         assistantIntent(AssistantOption.ASSISTANT).let { intent ->
-            packageManager.resolveActivity(intent, PackageManager.ResolveInfoFlags.of(0)) != null &&
+            packageManager.resolveActivity(intent, 0) != null &&
                 tryStartActivity(intent)
         }
 
