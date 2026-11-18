@@ -1251,6 +1251,9 @@ private fun FloatingCardColumn(
     musicShowAlbum: Boolean = true,
     musicShowArt: Boolean = true,
 ) {
+    // Weather-only (calendar hidden): a small temperature chip on top, so the
+    // music card gets the room.
+    val compactWeather = panels.weather && !panels.calendar
     val calendar: @Composable (Modifier) -> Unit = { cardModifier ->
         CalendarCard(
             snapshot = uiState.calendar,
@@ -1274,6 +1277,7 @@ private fun FloatingCardColumn(
             glassConfig = glassConfig,
             motionTier = motionTier,
             modifier = cardModifier,
+            compact = compactWeather,
         )
     }
     val music: @Composable (Modifier) -> Unit = { cardModifier ->
@@ -1306,6 +1310,9 @@ private fun FloatingCardColumn(
         // row's height, so it wraps its head and the map takes the rest.
         if (calendarWrapsHead(panels, calendarDateOnly)) {
             calendar(Modifier.fillMaxWidth())
+        } else if (compactWeather) {
+            weather(Modifier.fillMaxWidth())
+            Box(modifier = Modifier.weight(1f))
         } else if (panels.calendar || panels.weather) {
             Row(
                 modifier = Modifier.fillMaxWidth().weight(1f),
@@ -1352,9 +1359,9 @@ private val MarkerOverlayClearance: Dp = 20.dp
 // derives MapConfig.rightSafeFraction without a second layout pass; ~0.40 leaves
 // the bulk of a 5:3 (853 dp) panel for the map, the min keeps a 16:9 unit's cards
 // legible, and the max stops an ultra-wide panel from eating the map.
-private const val FLOATING_CARD_WIDTH_FRACTION = 0.40f
-private val FloatingCardWidthMin: Dp = 260.dp
-private val FloatingCardWidthMax: Dp = 350.dp
+private const val FLOATING_CARD_WIDTH_FRACTION = 0.46f
+private val FloatingCardWidthMin: Dp = 300.dp
+private val FloatingCardWidthMax: Dp = 460.dp
 
 // Cap on the floating card cluster's height (right column and portrait band) so the
 // cards keep their designed proportions on tall displays (1080 dp+) instead of
